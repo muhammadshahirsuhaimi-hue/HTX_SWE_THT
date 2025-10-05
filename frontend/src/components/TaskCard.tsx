@@ -30,30 +30,31 @@ const TaskCard: React.FC<Props> = ({ task, developers, refreshTasks }) => {
   };
 
   return (
-    <div className="border p-4 mb-3 rounded shadow">
-      <h2 className="font-semibold">{task.title}</h2>
-      <p className="text-sm text-gray-500 mb-2">
-        Skills: {task.skills.join(", ")}
-      </p>
+    <tr className="border-b border-gray-300">
+      {/* Title */}
+      <td className="px-2 py-1">{task.title}</td>
 
-      <div className="flex items-center gap-2 mb-2">
-        <label>Status:</label>
+      {/* Skills */}
+      <td className="px-2 py-1">{task.skills.join(", ")}</td>
+
+      {/* Status */}
+      <td className="px-2 py-1">
         <select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          className="border p-1 rounded"
+          className="border p-1 rounded w-full"
         >
           <option value="To-do">To-do</option>
           <option value="Done">Done</option>
         </select>
-      </div>
+      </td>
 
-      <div className="flex items-center gap-2 mb-2">
-        <label>Assignee:</label>
+      {/* Assignee */}
+      <td className="px-2 py-1">
         <select
           value={assignee}
           onChange={(e) => setAssignee(parseInt(e.target.value))}
-          className="border p-1 rounded"
+          className="border p-1 rounded w-full"
         >
           <option value={0}>Unassigned</option>
           {developers.map((dev) => (
@@ -62,15 +63,18 @@ const TaskCard: React.FC<Props> = ({ task, developers, refreshTasks }) => {
             </option>
           ))}
         </select>
-      </div>
+      </td>
 
-      <button
-        onClick={handleUpdate}
-        className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-      >
-        Update
-      </button>
-    </div>
+      {/* Update button */}
+      <td className="px-2 py-1">
+        <button
+          onClick={handleUpdate}
+          className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+        >
+          Update
+        </button>
+      </td>
+    </tr>
   );
 };
 
