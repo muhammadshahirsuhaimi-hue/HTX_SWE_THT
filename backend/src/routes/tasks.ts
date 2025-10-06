@@ -28,37 +28,50 @@ router.get("/", async (req, res) => {
 });
 
 
-// POST create task (parent or subtask)
+// Recursive task creation function
+const createTaskRecursive = async (task: any, parent_id: number | null = null) => {
+  const { title, skills = [], assignee_id = null, subtasks = [] } = task;
+
+  // Insert main task
+  const insertTask = await pool.query(
+    "INSERT INTO tasks (title, assignee_id, parent_id) VALUES ($1, $2, $3) RETURNING *",
+    [title, assignee_id, parent_id]
+  );
+  const newTask = insertTask.rows[0];
+
+  // Handle skills
+  for (let skillName of skills) {
+    let skillRes = await pool.query("SELECT id FROM skills WHERE name=$1", [skillName]);
+    let skill_id;
+    if (skillRes.rows.length) {
+      skill_id = skillRes.rows[0].id;
+    } else {
+      const newSkill = await pool.query(
+        "INSERT INTO skills (name) VALUES ($1) RETURNING id",
+        [skillName]
+      );
+      skill_id = newSkill.rows[0].id;
+    }
+    await pool.query("INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)", [
+      newTask.id,
+      skill_id,
+    ]);
+  }
+
+  // Recursively create subtasks (if any)
+  for (let subtask of subtasks) {
+    await createTaskRecursive(subtask, newTask.id);
+  }
+
+  return newTask;
+};
+
+// POST /tasks
 router.post("/", async (req, res) => {
   try {
-    const { title, skills = [], assignee_id = null, parent_id = null } = req.body;
-
-    const insertTask = await pool.query(
-      "INSERT INTO tasks (title, assignee_id, parent_id) VALUES ($1, $2, $3) RETURNING *",
-      [title, assignee_id, parent_id]
-    );
-
-    const task = insertTask.rows[0];
-
-    for (let skill of skills) {
-      const skillRes = await pool.query("SELECT id FROM skills WHERE name=$1", [skill]);
-      let skill_id;
-      if (skillRes.rows.length) {
-        skill_id = skillRes.rows[0].id;
-      } else {
-        const newSkill = await pool.query(
-          "INSERT INTO skills (name) VALUES ($1) RETURNING id",
-          [skill]
-        );
-        skill_id = newSkill.rows[0].id;
-      }
-      await pool.query("INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)", [
-        task.id,
-        skill_id,
-      ]);
-    }
-
-    res.json(task);
+    const task = req.body;
+    const createdTask = await createTaskRecursive(task);
+    res.json(createdTask);
   } catch (err) {
     console.error("createTask error:", err);
     res.status(500).json({ error: "Failed to create task" });
