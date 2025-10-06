@@ -1,100 +1,113 @@
-import { Router } from "express";
+import express from "express";
 import pool from "../db";
 
-const router = Router();
+const router = express.Router();
 
-interface SkillRow {
-  skill_id: number;
-}
-
-
-// CREATE Task
+// ------------------- POST /tasks -------------------
 router.post("/", async (req, res) => {
-  const { title, skills = [], assignee_id, status = "to-do", parent_id = null } = req.body;
+  const task = req.body;
 
+  if (!task || !task.title) {
+    return res.status(400).json({ error: "Task title is required" });
+  }
+
+  const client = await pool.connect();
   try {
-    // Insert task
-    const result = await pool.query(
-      "INSERT INTO tasks (title, status, assignee_id, parent_id) VALUES ($1, $2, $3, $4) RETURNING *",
-      [title, status, assignee_id || null, parent_id]
+    await client.query("BEGIN");
+
+    // 1. Insert main task
+    const mainTaskRes = await client.query(
+      `INSERT INTO tasks (title, status, assignee_id)
+       VALUES ($1, $2, $3) RETURNING id`,
+      [task.title, task.status || "to-do", task.assignee_id || null]
     );
 
-    const task = result.rows[0];
+    const mainTaskId = mainTaskRes.rows[0].id;
 
-    // Insert task skills if provided
-    if (skills.length > 0) {
-      for (const skillId of skills) {
-        await pool.query(
-          "INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)",
-          [task.id, skillId]
+    // 2️. Insert main task skills
+    if (task.skills && task.skills.length > 0) {
+      for (const skillName of task.skills) {
+        const skillRes = await client.query(
+          `SELECT id FROM skills WHERE name = $1`,
+          [skillName]
+        );
+        if (skillRes.rows.length === 0) {
+          console.warn(`Skill "${skillName}" not found in DB`);
+          continue;
+        }
+        await client.query(
+          `INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)`,
+          [mainTaskId, skillRes.rows[0].id]
         );
       }
     }
 
-    res.status(201).json(task);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to create task" });
-  }
-});
+    // 3️. Insert subtasks (only one level)
+    if (task.subtasks && task.subtasks.length > 0) {
+      for (const subtask of task.subtasks) {
+        const subtaskRes = await client.query(
+          `INSERT INTO tasks (title, status, assignee_id, parent_id)
+           VALUES ($1, $2, $3, $4) RETURNING id`,
+          [subtask.title, subtask.status || "to-do", subtask.assignee_id || null, mainTaskId]
+        );
+        const subtaskId = subtaskRes.rows[0].id;
 
-// READ all tasks
-router.get("/", async (_req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT t.id, t.title, t.status, t.assignee_id, d.name as assignee,
-             json_agg(s.name) FILTER (WHERE s.name IS NOT NULL) as skills
-      FROM tasks t
-      LEFT JOIN developers d ON t.assignee_id = d.id
-      LEFT JOIN task_skills ts ON t.id = ts.task_id
-      LEFT JOIN skills s ON ts.skill_id = s.id
-      GROUP BY t.id, d.name
-      ORDER BY t.id
-    `);
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch tasks" });
-  }
-});
-
-// UPDATE Task (assign developer / change status)
-router.put("/:id", async (req, res) => {
-  const { id } = req.params;
-  const { assignee_id, status } = req.body;
-
-  try {
-    // If assigning developer, check skills
-    if (assignee_id) {
-      const skillsRes = await pool.query(
-        "SELECT skill_id FROM task_skills WHERE task_id = $1",
-        [id]
-      );
-      const taskSkills = skillsRes.rows.map((r: SkillRow) => r.skill_id);
-
-      const devRes = await pool.query(
-        "SELECT skill_id FROM developer_skills WHERE developer_id = $1",
-        [assignee_id]
-      );
-      const devSkills = devRes.rows.map((r: SkillRow) => r.skill_id);
-
-      // Verify developer has required skills
-      const hasAllSkills = taskSkills.every((skill: number) => devSkills.includes(skill));
-      if (!hasAllSkills) {
-        return res.status(400).json({ error: "Developer does not have required skills" });
+        // Insert skills for subtask
+        if (subtask.skills && subtask.skills.length > 0) {
+          for (const skillName of subtask.skills) {
+            const skillRes = await client.query(
+              `SELECT id FROM skills WHERE name = $1`,
+              [skillName]
+            );
+            if (skillRes.rows.length === 0) {
+              console.warn(`Skill "${skillName}" not found in DB`);
+              continue;
+            }
+            await client.query(
+              `INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)`,
+              [subtaskId, skillRes.rows[0].id]
+            );
+          }
+        }
       }
     }
 
-    // Update task
-    const result = await pool.query(
-      "UPDATE tasks SET assignee_id = COALESCE($1, assignee_id), status = COALESCE($2, status) WHERE id = $3 RETURNING *",
-      [assignee_id || null, status || null, id]
-    );
+    await client.query("COMMIT");
+    res.status(201).json({ taskId: mainTaskId });
+  } catch (err: any) {
+    await client.query("ROLLBACK");
+    console.error("Failed to create task:", err);
+    res.status(500).json({ error: "Failed to create task", details: err.message });
+  } finally {
+    client.release();
+  }
+});
 
-    res.json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to update task" });
+// ------------------- GET /tasks -------------------
+router.get("/", async (req, res) => {
+  try {
+    const tasksRes = await pool.query(`
+      SELECT
+        t.id,
+        t.title,
+        t.status,
+        t.assignee_id,
+        t.parent_id,
+        COALESCE(
+          ARRAY_AGG(s.name) FILTER (WHERE s.name IS NOT NULL),
+          '{}'
+        ) AS skills
+      FROM tasks t
+      LEFT JOIN task_skills ts ON t.id = ts.task_id
+      LEFT JOIN skills s ON ts.skill_id = s.id
+      GROUP BY t.id, t.parent_id
+      ORDER BY t.id
+    `);
+
+    res.json(tasksRes.rows);
+  } catch (err: any) {
+    console.error("Failed to fetch tasks:", err);
+    res.status(500).json({ error: "Failed to fetch tasks", details: err.message });
   }
 });
 

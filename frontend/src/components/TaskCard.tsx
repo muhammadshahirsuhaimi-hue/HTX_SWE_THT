@@ -6,7 +6,8 @@ interface Task {
   title: string;
   skills: string[];
   status: string;
-  developer_id: number | null;
+  assignee_id: number | null;
+  parent_id: number | null;
 }
 
 interface Developer {
@@ -22,22 +23,27 @@ interface Props {
 
 const TaskCard: React.FC<Props> = ({ task, developers, refreshTasks }) => {
   const [status, setStatus] = useState(task.status);
-  const [assignee, setAssignee] = useState(task.developer_id || 0);
+  const [assignee, setAssignee] = useState(task.assignee_id || 0);
 
   const handleUpdate = async () => {
-    await updateTask(task.id, { status, developer_id: assignee || null });
-    refreshTasks();
+    try {
+      await updateTask(task.id, { status, assignee_id: assignee || null });
+      refreshTasks();
+    } catch (err) {
+      console.error("Error updating task:", err);
+      alert("Failed to update task. Check console for details.");
+    }
   };
 
   return (
     <tr className="border-b border-gray-300">
-      {/* Title */}
+      {/* Task Title */}
       <td className="px-2 py-1">{task.title}</td>
 
       {/* Skills */}
       <td className="px-2 py-1">{task.skills.join(", ")}</td>
 
-      {/* Status */}
+      {/* Status Dropdown */}
       <td className="px-2 py-1">
         <select
           value={status}
@@ -49,7 +55,7 @@ const TaskCard: React.FC<Props> = ({ task, developers, refreshTasks }) => {
         </select>
       </td>
 
-      {/* Assignee */}
+      {/* Assignee Dropdown */}
       <td className="px-2 py-1">
         <select
           value={assignee}
@@ -65,7 +71,7 @@ const TaskCard: React.FC<Props> = ({ task, developers, refreshTasks }) => {
         </select>
       </td>
 
-      {/* Update button */}
+      {/* Update Button */}
       <td className="px-2 py-1">
         <button
           onClick={handleUpdate}

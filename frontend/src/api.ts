@@ -12,37 +12,47 @@ const api = axios.create({
 
 // ------------------- Task APIs -------------------
 
+export interface TaskPayload {
+  title: string;
+  skills: string[];
+  assignee_id?: number | null;
+  parent_id?: number | null; // for subtasks
+  subtasks?: TaskPayload[];  // nested subtasks
+}
+
+// Fetch all tasks
 export const getTasks = async () => {
   try {
     const res = await api.get("/tasks");
     return res.data;
   } catch (err) {
     console.error("Error fetching tasks:", err);
-    return [];
+    throw err; // allow frontend to handle error
   }
 };
 
-export const createTask = async (task: {
-  title: string;
-  skills: string[];
-}) => {
+// Create task (with optional subtasks)
+export const createTask = async (task: TaskPayload) => {
   try {
     const res = await api.post("/tasks", task);
     return res.data;
   } catch (err) {
     console.error("Error creating task:", err);
+    throw err;
   }
 };
 
+// Update task (status, assignee)
 export const updateTask = async (
   id: number,
-  updates: { status?: string; developer_id?: number | null }
+  updates: { status?: string; assignee_id?: number | null }
 ) => {
   try {
     const res = await api.put(`/tasks/${id}`, updates);
     return res.data;
   } catch (err) {
     console.error("Error updating task:", err);
+    throw err;
   }
 };
 
@@ -54,7 +64,7 @@ export const getDevelopers = async () => {
     return res.data;
   } catch (err) {
     console.error("Error fetching developers:", err);
-    return [];
+    throw err;
   }
 };
 
@@ -66,7 +76,7 @@ export const getSkills = async () => {
     return res.data;
   } catch (err) {
     console.error("Error fetching skills:", err);
-    return [];
+    throw err;
   }
 };
 

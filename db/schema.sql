@@ -30,6 +30,13 @@ CREATE TABLE tasks (
     title TEXT NOT NULL,
     status VARCHAR(20) DEFAULT 'to-do',
     assignee_id INT REFERENCES developers(id),
-    parent_id INT REFERENCES tasks(id),         -- for subtasks
-    skills TEXT[]                               -- store comma-separated skill names
+    parent_id INT REFERENCES tasks(id) ON DELETE SET NULL,
+    skills TEXT[]
+);
+
+-- Task skills join table
+CREATE TABLE task_skills (
+    task_id INT REFERENCES tasks(id),
+    skill_id INT REFERENCES skills(id),
+    PRIMARY KEY (task_id, skill_id)
 );
