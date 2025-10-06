@@ -19,9 +19,10 @@ interface Props {
   task: Task;
   developers: Developer[];
   refreshTasks: () => void;
+  indentLevel?: number; // for subtask indentation
 }
 
-const TaskCard: React.FC<Props> = ({ task, developers, refreshTasks }) => {
+const TaskCard: React.FC<Props> = ({ task, developers, refreshTasks, indentLevel = 0 }) => {
   const [status, setStatus] = useState(task.status);
   const [assignee, setAssignee] = useState(task.assignee_id || 0);
 
@@ -30,53 +31,34 @@ const TaskCard: React.FC<Props> = ({ task, developers, refreshTasks }) => {
       await updateTask(task.id, { status, assignee_id: assignee || null });
       refreshTasks();
     } catch (err) {
-      console.error("Error updating task:", err);
-      alert("Failed to update task. Check console for details.");
+      console.error("Update failed:", err);
+      alert(err?.response?.data?.error || "Update failed");
     }
   };
 
   return (
     <tr className="border-b border-gray-300">
-      {/* Task Title */}
-      <td className="px-2 py-1">{task.title}</td>
-
-      {/* Skills */}
-      <td className="px-2 py-1">{task.skills.join(", ")}</td>
-
-      {/* Status Dropdown */}
-      <td className="px-2 py-1">
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="border p-1 rounded w-full"
-        >
+      <td className="px-4 py-2" style={{ paddingLeft: `${indentLevel * 20}px` }}>
+        {task.title}
+      </td>
+      <td className="px-4 py-2">{(task.skills || []).join(", ")}</td>
+      <td className="px-4 py-2">
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="border p-1 rounded w-full">
           <option value="To-do">To-do</option>
+          <option value="In-progress">In-progress</option>
           <option value="Done">Done</option>
         </select>
       </td>
-
-      {/* Assignee Dropdown */}
-      <td className="px-2 py-1">
-        <select
-          value={assignee}
-          onChange={(e) => setAssignee(parseInt(e.target.value))}
-          className="border p-1 rounded w-full"
-        >
+      <td className="px-4 py-2">
+        <select value={assignee} onChange={(e) => setAssignee(parseInt(e.target.value))} className="border p-1 rounded w-full">
           <option value={0}>Unassigned</option>
           {developers.map((dev) => (
-            <option key={dev.id} value={dev.id}>
-              {dev.name}
-            </option>
+            <option key={dev.id} value={dev.id}>{dev.name}</option>
           ))}
         </select>
       </td>
-
-      {/* Update Button */}
-      <td className="px-2 py-1">
-        <button
-          onClick={handleUpdate}
-          className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-        >
+      <td className="px-4 py-2">
+        <button onClick={handleUpdate} className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
           Update
         </button>
       </td>

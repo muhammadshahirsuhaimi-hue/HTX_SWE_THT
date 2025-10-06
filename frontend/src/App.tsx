@@ -24,19 +24,31 @@ const App: React.FC = () => {
 
   const fetchTasks = async () => {
     try {
-      const res = await getTasks();
-      setTasks(Array.isArray(res.data) ? [...res.data] : []);
+      const data = await getTasks();
+      if (Array.isArray(data)) {
+        setTasks(data);
+      } else {
+        console.error("Unexpected task response:", data);
+        setTasks([]);
+      }
     } catch (err) {
-      console.error("Failed to fetch tasks", err);
+      console.error("❌ Failed to fetch tasks:", err);
+      setTasks([]);
     }
   };
 
   const fetchDevelopers = async () => {
     try {
-      const res = await getDevelopers();
-      setDevelopers(res.data);
+      const data = await getDevelopers();
+      if (Array.isArray(data)) {
+        setDevelopers(data);
+      } else {
+        console.error("Unexpected developer response:", data);
+        setDevelopers([]);
+      }
     } catch (err) {
-      console.error("Failed to fetch developers", err);
+      console.error("Failed to fetch developers:", err);
+      setDevelopers([]);
     }
   };
 
@@ -47,25 +59,17 @@ const App: React.FC = () => {
 
   return (
     <Router>
-      <div className="max-w-3xl mx-auto">
-        {/* Navigation */}
+      <div className="max-w-5xl mx-auto">
         <nav className="mb-6 flex gap-4 bg-gray-100 p-3 rounded shadow">
-          <Link
-            to="/tasks"
-            className="text-blue-600 font-semibold hover:underline"
-          >
+          <Link to="/tasks" className="text-blue-600 font-semibold hover:underline">
             Task List
           </Link>
-          <Link
-            to="/create"
-            className="text-blue-600 font-semibold hover:underline"
-          >
+          <Link to="/create" className="text-blue-600 font-semibold hover:underline">
             Create Task
           </Link>
         </nav>
 
-        {/* Page content */}
-        <main className="p-4 bg-white rounded shadow">
+        <main className="p-6 bg-white rounded shadow">
           <Routes>
             <Route
               path="/tasks"

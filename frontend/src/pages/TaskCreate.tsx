@@ -1,134 +1,118 @@
-import React, { useEffect, useState } from "react";
-import { getDevelopers, createTask } from "../api";
+import React, { useState } from "react";
+import { createTask } from "../api";
 
 interface Developer {
   id: number;
   name: string;
 }
 
-interface TaskInput {
-  title: string;
-  skills: string[];
-  developer_id: number | null;
-  subtasks?: TaskInput[];
+interface Props {
+  developers: Developer[];
+  refreshTasks: () => void;
 }
 
-const TaskCreate: React.FC = () => {
-  const [developers, setDevelopers] = useState<Developer[]>([]);
-  const [mainTask, setMainTask] = useState<TaskInput>({
-    title: "",
-    skills: [],
-    developer_id: null,
-    subtasks: [],
-  });
+const TaskCreate: React.FC<Props> = ({ developers, refreshTasks }) => {
+  const [title, setTitle] = useState("");
+  const [skills, setSkills] = useState<string[]>([]);
+  const [skillInput, setSkillInput] = useState("");
+  const [assignee, setAssignee] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const fetchDevelopers = async () => {
-      try {
-        const devs = await getDevelopers();
-        setDevelopers(devs || []);
-      } catch (err) {
-        console.error("Error fetching developers:", err);
-      }
-    };
-    fetchDevelopers();
-  }, []);
-
-  const handleAddSubtask = () => {
-    setMainTask({
-      ...mainTask,
-      subtasks: [
-        ...(mainTask.subtasks || []),
-        { title: "", skills: [], developer_id: null },
-      ],
-    });
+  const addSkill = () => {
+    if (skillInput && !skills.includes(skillInput)) {
+      setSkills([...skills, skillInput]);
+      setSkillInput("");
+    }
   };
 
-  const handleSubtaskChange = (
-    index: number,
-    field: keyof TaskInput,
-    value: string | number | null
-  ) => {
-    const updatedSubtasks = [...(mainTask.subtasks || [])];
-    if (field === "skills") {
-      updatedSubtasks[index][field] = (value as string)
-        .split(",")
-        .map((s) => s.trim());
-    } else {
-      updatedSubtasks[index][field] = value as any;
-    }
-    setMainTask({ ...mainTask, subtasks: updatedSubtasks });
+  const removeSkill = (s: string) => {
+    setSkills(skills.filter((x) => x !== s));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!title.trim()) return alert("Title is required");
+
     try {
-      await createTask(mainTask);
-      alert("Task and subtasks created successfully!");
-      setMainTask({ title: "", skills: [], developer_id: null, subtasks: [] });
+      setLoading(true);
+      await createTask({
+        title,
+        skills,
+        status: "pending",
+        assignee_id: assignee,
+        parent_id: null,
+      });
+      await refreshTasks();
+      setTitle("");
+      setSkills([]);
+      setAssignee(null);
     } catch (err) {
-      console.error("Error creating task:", err);
+      console.error(err);
+      alert("Failed to create task");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-4 border rounded shadow">
-      <h1 className="text-xl font-bold mb-4">Create Task</h1>
-
-      <form onSubmit={handleSubmit}>
-        <table className="min-w-full border-collapse border border-gray-300">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border p-2 text-left">Title</th>
-              <th className="border p-2 text-left">Skills</th>
-              <th className="border p-2 text-left">Assignee</th>
-              <th className="border p-2 text-left">Action</th>
-            </tr>
-          </thead>
-
+    <div>
+      <h2 className="text-xl font-semibold mb-4">Create Task</h2>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <table className="w-full border-collapse">
           <tbody>
-            {/* Main task row */}
-            <tr className="bg-white">
-              <td className="border p-2">
+            <tr>
+              <td className="py-2 px-4 w-1/4 font-semibold">Title:</td>
+              <td className="py-2 px-4">
                 <input
-                  type="text"
-                  value={mainTask.title}
-                  onChange={(e) =>
-                    setMainTask({ ...mainTask, title: e.target.value })
-                  }
-                  className="border p-1 rounded w-full"
-                  placeholder="Task title"
+                  className="border rounded w-full px-3 py-2"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
                   required
                 />
               </td>
-
-              <td className="border p-2">
-                <input
-                  type="text"
-                  value={mainTask.skills.join(", ")}
-                  onChange={(e) =>
-                    setMainTask({
-                      ...mainTask,
-                      skills: e.target.value.split(",").map((s) => s.trim()),
-                    })
-                  }
-                  className="border p-1 rounded w-full"
-                  placeholder="Skills, e.g., Frontend, Backend"
-                />
+            </tr>
+            <tr>
+              <td className="py-2 px-4 font-semibold">Skills:</td>
+              <td className="py-2 px-4">
+                <div className="flex gap-2 mb-2">
+                  <input
+                    className="border rounded flex-1 px-3 py-2"
+                    value={skillInput}
+                    onChange={(e) => setSkillInput(e.target.value)}
+                    placeholder="Enter skill"
+                  />
+                  <button
+                    type="button"
+                    onClick={addSkill}
+                    className="bg-blue-500 text-white px-3 rounded"
+                  >
+                    Add
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {skills.map((s) => (
+                    <span
+                      key={s}
+                      className="bg-gray-200 px-2 py-1 rounded cursor-pointer"
+                      onClick={() => removeSkill(s)}
+                    >
+                      {s} ✕
+                    </span>
+                  ))}
+                </div>
               </td>
-
-              <td className="border p-2">
+            </tr>
+            <tr>
+              <td className="py-2 px-4 font-semibold">Assignee:</td>
+              <td className="py-2 px-4">
                 <select
-                  value={mainTask.developer_id ?? 0}
+                  className="border rounded px-3 py-2 w-full"
+                  value={assignee ?? ""}
                   onChange={(e) =>
-                    setMainTask({
-                      ...mainTask,
-                      developer_id: Number(e.target.value) || null,
-                    })
+                    setAssignee(e.target.value ? Number(e.target.value) : null)
                   }
-                  className="border p-1 rounded w-full"
                 >
-                  <option value={0}>Unassigned</option>
+                  <option value="">Select developer</option>
                   {developers.map((dev) => (
                     <option key={dev.id} value={dev.id}>
                       {dev.name}
@@ -136,93 +120,17 @@ const TaskCreate: React.FC = () => {
                   ))}
                 </select>
               </td>
-
-              <td className="border p-2">
-                <button
-                  type="button"
-                  onClick={handleAddSubtask}
-                  className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-                >
-                  Add Subtask
-                </button>
-              </td>
             </tr>
-
-            {/* Subtasks */}
-            {mainTask.subtasks?.map((subtask, idx) => (
-              <tr key={idx} className="bg-gray-50">
-                <td className="border p-2">
-                  <input
-                    type="text"
-                    value={subtask.title}
-                    onChange={(e) =>
-                      handleSubtaskChange(idx, "title", e.target.value)
-                    }
-                    className="border p-1 rounded w-full"
-                    placeholder="Subtask title"
-                    required
-                  />
-                </td>
-
-                <td className="border p-2">
-                  <input
-                    type="text"
-                    value={subtask.skills.join(", ")}
-                    onChange={(e) =>
-                      handleSubtaskChange(idx, "skills", e.target.value)
-                    }
-                    className="border p-1 rounded w-full"
-                    placeholder="Skills, e.g., Frontend, Backend"
-                  />
-                </td>
-
-                <td className="border p-2">
-                  <select
-                    value={subtask.developer_id ?? 0}
-                    onChange={(e) =>
-                      handleSubtaskChange(
-                        idx,
-                        "developer_id",
-                        Number(e.target.value) || null
-                      )
-                    }
-                    className="border p-1 rounded w-full"
-                  >
-                    <option value={0}>Unassigned</option>
-                    {developers.map((dev) => (
-                      <option key={dev.id} value={dev.id}>
-                        {dev.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-
-                <td className="border p-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const updated = [...(mainTask.subtasks || [])];
-                      updated.splice(idx, 1);
-                      setMainTask({ ...mainTask, subtasks: updated });
-                    }}
-                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
-                  >
-                    Remove
-                  </button>
-                </td>
-              </tr>
-            ))}
           </tbody>
         </table>
 
-        <div className="mt-4">
-          <button
-            type="submit"
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-          >
-            Save Task
-          </button>
-        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="bg-green-600 text-white px-4 py-2 rounded"
+        >
+          {loading ? "Creating..." : "Create Task"}
+        </button>
       </form>
     </div>
   );

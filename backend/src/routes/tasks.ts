@@ -1,113 +1,103 @@
-import express from "express";
+import { Router } from "express";
 import pool from "../db";
 
-const router = express.Router();
+const router = Router();
 
-// ------------------- POST /tasks -------------------
-router.post("/", async (req, res) => {
-  const task = req.body;
-
-  if (!task || !task.title) {
-    return res.status(400).json({ error: "Task title is required" });
-  }
-
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    // 1. Insert main task
-    const mainTaskRes = await client.query(
-      `INSERT INTO tasks (title, status, assignee_id)
-       VALUES ($1, $2, $3) RETURNING id`,
-      [task.title, task.status || "to-do", task.assignee_id || null]
-    );
-
-    const mainTaskId = mainTaskRes.rows[0].id;
-
-    // 2️. Insert main task skills
-    if (task.skills && task.skills.length > 0) {
-      for (const skillName of task.skills) {
-        const skillRes = await client.query(
-          `SELECT id FROM skills WHERE name = $1`,
-          [skillName]
-        );
-        if (skillRes.rows.length === 0) {
-          console.warn(`Skill "${skillName}" not found in DB`);
-          continue;
-        }
-        await client.query(
-          `INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)`,
-          [mainTaskId, skillRes.rows[0].id]
-        );
-      }
-    }
-
-    // 3️. Insert subtasks (only one level)
-    if (task.subtasks && task.subtasks.length > 0) {
-      for (const subtask of task.subtasks) {
-        const subtaskRes = await client.query(
-          `INSERT INTO tasks (title, status, assignee_id, parent_id)
-           VALUES ($1, $2, $3, $4) RETURNING id`,
-          [subtask.title, subtask.status || "to-do", subtask.assignee_id || null, mainTaskId]
-        );
-        const subtaskId = subtaskRes.rows[0].id;
-
-        // Insert skills for subtask
-        if (subtask.skills && subtask.skills.length > 0) {
-          for (const skillName of subtask.skills) {
-            const skillRes = await client.query(
-              `SELECT id FROM skills WHERE name = $1`,
-              [skillName]
-            );
-            if (skillRes.rows.length === 0) {
-              console.warn(`Skill "${skillName}" not found in DB`);
-              continue;
-            }
-            await client.query(
-              `INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)`,
-              [subtaskId, skillRes.rows[0].id]
-            );
-          }
-        }
-      }
-    }
-
-    await client.query("COMMIT");
-    res.status(201).json({ taskId: mainTaskId });
-  } catch (err: any) {
-    await client.query("ROLLBACK");
-    console.error("Failed to create task:", err);
-    res.status(500).json({ error: "Failed to create task", details: err.message });
-  } finally {
-    client.release();
-  }
-});
-
-// ------------------- GET /tasks -------------------
+// GET all tasks with skills
 router.get("/", async (req, res) => {
   try {
-    const tasksRes = await pool.query(`
-      SELECT
-        t.id,
-        t.title,
-        t.status,
-        t.assignee_id,
-        t.parent_id,
+    const result = await pool.query(`
+      SELECT 
+        t.*,
         COALESCE(
-          ARRAY_AGG(s.name) FILTER (WHERE s.name IS NOT NULL),
-          '{}'
+          json_agg(s.name) FILTER (WHERE s.id IS NOT NULL),
+          '[]'
         ) AS skills
       FROM tasks t
       LEFT JOIN task_skills ts ON t.id = ts.task_id
       LEFT JOIN skills s ON ts.skill_id = s.id
-      GROUP BY t.id, t.parent_id
+      GROUP BY t.id
       ORDER BY t.id
     `);
 
-    res.json(tasksRes.rows);
-  } catch (err: any) {
-    console.error("Failed to fetch tasks:", err);
-    res.status(500).json({ error: "Failed to fetch tasks", details: err.message });
+    res.json(result.rows);
+  } catch (err) {
+    console.error("getTasks error:", err);
+    res.status(500).json({ error: "Failed to fetch tasks" });
+  }
+});
+
+
+// POST create task (parent or subtask)
+router.post("/", async (req, res) => {
+  try {
+    const { title, skills = [], assignee_id = null, parent_id = null } = req.body;
+
+    const insertTask = await pool.query(
+      "INSERT INTO tasks (title, assignee_id, parent_id) VALUES ($1, $2, $3) RETURNING *",
+      [title, assignee_id, parent_id]
+    );
+
+    const task = insertTask.rows[0];
+
+    for (let skill of skills) {
+      const skillRes = await pool.query("SELECT id FROM skills WHERE name=$1", [skill]);
+      let skill_id;
+      if (skillRes.rows.length) {
+        skill_id = skillRes.rows[0].id;
+      } else {
+        const newSkill = await pool.query(
+          "INSERT INTO skills (name) VALUES ($1) RETURNING id",
+          [skill]
+        );
+        skill_id = newSkill.rows[0].id;
+      }
+      await pool.query("INSERT INTO task_skills (task_id, skill_id) VALUES ($1, $2)", [
+        task.id,
+        skill_id,
+      ]);
+    }
+
+    res.json(task);
+  } catch (err) {
+    console.error("createTask error:", err);
+    res.status(500).json({ error: "Failed to create task" });
+  }
+});
+
+// PUT update task
+router.put("/:id", async (req, res) => {
+  try {
+    const taskId = parseInt(req.params.id, 10);
+    const { status, assignee_id } = req.body;
+
+    console.log("Updating task:", taskId, "with", req.body);
+
+    // check if task exists
+    const taskRes = await pool.query("SELECT * FROM tasks WHERE id=$1", [taskId]);
+    if (!taskRes.rows.length) return res.status(404).json({ error: "Task not found" });
+    const task = taskRes.rows[0];
+
+    // If parent task, check subtasks for "Done" validation
+    if (status === "Done" && task.parent_id === null) {
+      const subtasks = await pool.query("SELECT * FROM tasks WHERE parent_id=$1", [taskId]);
+      if (subtasks.rows.some((st) => st.status !== "Done")) {
+        return res
+          .status(400)
+          .json({ error: "Cannot mark parent task as Done until all subtasks are Done" });
+      }
+    }
+
+    const updated = await pool.query(
+      "UPDATE tasks SET status=$1, assignee_id=$2 WHERE id=$3 RETURNING *",
+      [status ?? task.status, assignee_id ?? task.assignee_id, taskId]
+    );
+
+    console.log("Updated task:", updated.rows[0]);
+    res.json(updated.rows[0]);
+  } catch (err) {
+    console.error("updateTask error:", err);
+    res.status(500).json({ error: "Failed to update task" });
   }
 });
 
