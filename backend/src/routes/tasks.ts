@@ -1,45 +1,43 @@
 import { Router } from "express";
 import pool from "../db";
+import { getSkillsFromTitle } from "../services/llm";
 
 const router = Router();
 
-// GET all tasks with skills
-router.get("/", async (req, res) => {
-  try {
-    const result = await pool.query(`
-      SELECT 
-        t.*,
-        COALESCE(
-          json_agg(s.name) FILTER (WHERE s.id IS NOT NULL),
-          '[]'
-        ) AS skills
-      FROM tasks t
-      LEFT JOIN task_skills ts ON t.id = ts.task_id
-      LEFT JOIN skills s ON ts.skill_id = s.id
-      GROUP BY t.id
-      ORDER BY t.id
-    `);
+// -----------------------
+// Recursive task creation
+// -----------------------
+const createTaskRecursive = async (
+  task: any,
+  parent_id: number | null = null,
+  level: number = 1
+): Promise<any> => {
+  if (level > 4) throw new Error("Maximum subtask depth (4) exceeded");
 
-    res.json(result.rows);
-  } catch (err) {
-    console.error("getTasks error:", err);
-    res.status(500).json({ error: "Failed to fetch tasks" });
+  let { title, skills = [], assignee_id = null, subtasks = [] } = task;
+
+  // If no skills provided, try LLM
+  if (!skills || skills.length === 0) {
+    try {
+      const llmSkills = await getSkillsFromTitle(title);
+      skills = Array.isArray(llmSkills) ? llmSkills : [];
+    } catch (err: any) {
+      console.warn(
+        `LLM skill extraction failed for task "${title}":`,
+        err.response?.status || err.code || err.message
+      );
+      skills = [];
+    }
   }
-});
 
-
-// Recursive task creation function
-const createTaskRecursive = async (task: any, parent_id: number | null = null) => {
-  const { title, skills = [], assignee_id = null, subtasks = [] } = task;
-
-  // Insert main task
+  // Insert task
   const insertTask = await pool.query(
     "INSERT INTO tasks (title, assignee_id, parent_id) VALUES ($1, $2, $3) RETURNING *",
     [title, assignee_id, parent_id]
   );
   const newTask = insertTask.rows[0];
 
-  // Handle skills
+  // Insert skills
   for (let skillName of skills) {
     let skillRes = await pool.query("SELECT id FROM skills WHERE name=$1", [skillName]);
     let skill_id;
@@ -58,15 +56,42 @@ const createTaskRecursive = async (task: any, parent_id: number | null = null) =
     ]);
   }
 
-  // Recursively create subtasks (if any)
+  // Recursively create subtasks
   for (let subtask of subtasks) {
-    await createTaskRecursive(subtask, newTask.id);
+    await createTaskRecursive(subtask, newTask.id, level + 1);
   }
 
   return newTask;
 };
 
+// -----------------------
+// GET /tasks
+// -----------------------
+router.get("/", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        t.*,
+        COALESCE(
+          json_agg(s.name) FILTER (WHERE s.id IS NOT NULL),
+          '[]'
+        ) AS skills
+      FROM tasks t
+      LEFT JOIN task_skills ts ON t.id = ts.task_id
+      LEFT JOIN skills s ON ts.skill_id = s.id
+      GROUP BY t.id
+      ORDER BY t.id
+    `);
+    res.json(result.rows);
+  } catch (err) {
+    console.error("getTasks error:", err);
+    res.status(500).json({ error: "Failed to fetch tasks" });
+  }
+});
+
+// -----------------------
 // POST /tasks
+// -----------------------
 router.post("/", async (req, res) => {
   try {
     const task = req.body;
@@ -78,15 +103,15 @@ router.post("/", async (req, res) => {
   }
 });
 
-// PUT update task
+// -----------------------
+// PUT /tasks/:id
+// -----------------------
 router.put("/:id", async (req, res) => {
   try {
     const taskId = parseInt(req.params.id, 10);
     const { status, assignee_id } = req.body;
 
-    console.log("Updating task:", taskId, "with", req.body);
-
-    // check if task exists
+    // Check if task exists
     const taskRes = await pool.query("SELECT * FROM tasks WHERE id=$1", [taskId]);
     if (!taskRes.rows.length) return res.status(404).json({ error: "Task not found" });
     const task = taskRes.rows[0];
@@ -106,7 +131,6 @@ router.put("/:id", async (req, res) => {
       [status ?? task.status, assignee_id ?? task.assignee_id, taskId]
     );
 
-    console.log("Updated task:", updated.rows[0]);
     res.json(updated.rows[0]);
   } catch (err) {
     console.error("updateTask error:", err);

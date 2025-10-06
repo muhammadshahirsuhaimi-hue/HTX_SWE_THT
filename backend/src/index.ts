@@ -3,6 +3,8 @@ import cors from "cors";
 import taskRoutes from "./routes/tasks";
 import developerRoutes from "./routes/developers";
 import skillRoutes from "./routes/skills";
+import dotenv from "dotenv";
+dotenv.config();
 
 const app = express();
 app.use(cors());
