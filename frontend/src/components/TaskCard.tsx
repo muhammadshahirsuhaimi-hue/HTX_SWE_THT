@@ -37,28 +37,36 @@ const TaskCard: React.FC<Props> = ({ task, developers, refreshTasks, indentLevel
   };
 
   return (
-    <tr className="border-b border-gray-300">
-      <td className="px-4 py-2" style={{ paddingLeft: `${indentLevel * 20}px` }}>
-        {task.title}
-      </td>
-      <td className="px-4 py-2">{(task.skills || []).join(", ")}</td>
-      <td className="px-4 py-2">
-        <select value={status} onChange={(e) => setStatus(e.target.value)} className="border p-1 rounded w-full">
+    <tr className="table-row">
+      <td style={{ paddingLeft: `${indentLevel * 20}px` }}>{task.title}</td>
+      <td>{(task.skills || []).join(", ")}</td>
+      <td>
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="input-field"
+        >
           <option value="To-do">To-do</option>
           <option value="In-progress">In-progress</option>
           <option value="Done">Done</option>
         </select>
       </td>
-      <td className="px-4 py-2">
-        <select value={assignee} onChange={(e) => setAssignee(parseInt(e.target.value))} className="border p-1 rounded w-full">
+      <td>
+        <select
+          value={assignee}
+          onChange={(e) => setAssignee(parseInt(e.target.value))}
+          className="input-field"
+        >
           <option value={0}>Unassigned</option>
           {developers.map((dev) => (
-            <option key={dev.id} value={dev.id}>{dev.name}</option>
+            <option key={dev.id} value={dev.id}>
+              {dev.name}
+            </option>
           ))}
         </select>
       </td>
-      <td className="px-4 py-2">
-        <button onClick={handleUpdate} className="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
+      <td>
+        <button onClick={handleUpdate} className="button button-primary">
           Update
         </button>
       </td>

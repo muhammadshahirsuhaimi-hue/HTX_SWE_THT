@@ -26,26 +26,30 @@ const TaskList: React.FC<Props> = ({ tasks, developers, refreshTasks }) => {
     return tasks
       .filter((t) => t.parent_id === parentId)
       .map((task) => [
-        <TaskCard key={task.id} task={task} developers={developers} refreshTasks={refreshTasks} indentLevel={level} />,
+        <TaskCard
+          key={task.id}
+          task={task}
+          developers={developers}
+          refreshTasks={refreshTasks}
+          indentLevel={level}
+        />,
         ...renderTasks(task.id, level + 1),
       ])
       .flat();
   };
 
   return (
-    <div>
-      <h1 className="text-xl font-bold mb-4">Task List</h1>
-      <button className="mb-4 bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600" onClick={refreshTasks}>
-        Refresh
-      </button>
-      <table className="min-w-full border rounded shadow">
+    <div className="container">
+      <h1>Task List</h1>
+      <button onClick={refreshTasks}>Refresh</button>
+      <table>
         <thead>
           <tr>
-            <th className="px-4 py-2">Title</th>
-            <th className="px-4 py-2">Skills</th>
-            <th className="px-4 py-2">Status</th>
-            <th className="px-4 py-2">Assignee</th>
-            <th className="px-4 py-2">Action</th>
+            <th>Title</th>
+            <th>Skills</th>
+            <th>Status</th>
+            <th>Assignee</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>{renderTasks()}</tbody>

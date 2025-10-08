@@ -85,31 +85,31 @@ const TaskCreate: React.FC<Props> = ({ developers, refreshTasks }) => {
   const rows = flattenTasks(tasks);
 
   return (
-    <div>
-      <h2 className="text-xl font-semibold mb-4">Create Task</h2>
+    <div className="container">
+      <h2>Create Task</h2>
       <form onSubmit={handleSubmit}>
-        <table className="min-w-full border-collapse border rounded shadow">
+        <table>
           <thead>
-            <tr className="bg-gray-200">
-              <th className="px-4 py-2 text-left">Title</th>
-              <th className="px-4 py-2 text-left">Skills (comma separated)</th>
-              <th className="px-4 py-2 text-left">Assignee</th>
-              <th className="px-4 py-2 text-left">Action</th>
+            <tr>
+              <th>Title</th>
+              <th>Skills (comma separated)</th>
+              <th>Assignee</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
             {rows.map(({ task, depth, path }, idx) => (
-              <tr key={idx} className="border-b">
-                <td className="px-4 py-2" style={{ paddingLeft: `${depth * 20 + 8}px` }}>
+              <tr key={idx}>
+                <td style={{ paddingLeft: `${depth * 20}px` }}>
                   <input
                     type="text"
                     value={task.title}
                     onChange={(e) => updateTaskField(path, "title", e.target.value)}
-                    className="border rounded w-full px-2 py-1"
+                    className="input-field"
                     required
                   />
                 </td>
-                <td className="px-4 py-2">
+                <td>
                   <input
                     type="text"
                     value={task.skills.join(", ")}
@@ -120,10 +120,10 @@ const TaskCreate: React.FC<Props> = ({ developers, refreshTasks }) => {
                         e.target.value.split(",").map((s) => s.trim())
                       )
                     }
-                    className="border rounded w-full px-2 py-1"
+                    className="input-field"
                   />
                 </td>
-                <td className="px-4 py-2">
+                <td>
                   <select
                     value={task.assignee_id ?? ""}
                     onChange={(e) =>
@@ -133,7 +133,7 @@ const TaskCreate: React.FC<Props> = ({ developers, refreshTasks }) => {
                         e.target.value ? Number(e.target.value) : null
                       )
                     }
-                    className="border rounded w-full px-2 py-1"
+                    className="input-field"
                   >
                     <option value="">Unassigned</option>
                     {developers.map((dev) => (
@@ -143,12 +143,12 @@ const TaskCreate: React.FC<Props> = ({ developers, refreshTasks }) => {
                     ))}
                   </select>
                 </td>
-                <td className="px-4 py-2">
+                <td>
                   {depth < MAX_SUBTASK_DEPTH && (
                     <button
                       type="button"
                       onClick={() => addSubtask(path, depth)}
-                      className="bg-blue-500 text-white px-2 py-1 rounded"
+                      className="button"
                     >
                       Add Subtask
                     </button>
@@ -158,12 +158,8 @@ const TaskCreate: React.FC<Props> = ({ developers, refreshTasks }) => {
             ))}
           </tbody>
         </table>
-        <div className="mt-4 flex justify-end">
-          <button
-            type="submit"
-            disabled={loading}
-            className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-          >
+        <div className="form-actions">
+          <button type="submit" disabled={loading} className="button button-primary">
             {loading ? "Creating..." : "Create Task"}
           </button>
         </div>
