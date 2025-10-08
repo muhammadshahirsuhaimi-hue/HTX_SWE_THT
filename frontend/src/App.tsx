@@ -61,10 +61,10 @@ const App: React.FC = () => {
     <Router>
       <div className="max-w-5xl mx-auto">
         <nav className="mb-6 flex gap-4 bg-gray-100 p-3 rounded shadow">
-          <Link to="/tasks" className="text-blue-600 font-semibold hover:underline">
+          <Link to="/tasks" className="text-blue-600 font-semibold hover:underline" style={{ padding: '0% 2% 0% 2%' }}>
             Task List
           </Link>
-          <Link to="/create" className="text-blue-600 font-semibold hover:underline">
+          <Link to="/create" className="text-blue-600 font-semibold hover:underline" style={{ padding: '0% 2% 0% 2%' }}>
             Create Task
           </Link>
         </nav>
