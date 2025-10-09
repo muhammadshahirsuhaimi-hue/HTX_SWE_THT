@@ -27,8 +27,6 @@ services:
       - ./backend/.env
     ports:
       - "3001:3001"
-    volumes:
-      - ./backend:/app
     command: ["npm", "run", "dev"]
 
   frontend:
